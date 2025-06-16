@@ -1,0 +1,2 @@
+1. tirar a carta do carrinho dps de pegar o preço
+2. iterar isso com todas as cartas, levando em consideração a tabela
