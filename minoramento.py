@@ -1,24 +1,31 @@
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium import webdriver
+from urllib.parse import quote
+from datetime import datetime
 import pandas as pd
 import numpy as np
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from urllib.parse import quote
 import time
 import re
 
 colunas = ['nome', 'numero', 'condicao', 'preco', 'total', 'data']
-album = pd.read_excel('Preço do album.xlsx', skiprows= 4, usecols= 'E, F, G, H, J, K', names= colunas)
-total = 0
-data = album.data[0]
+album = pd.read_excel('album.xlsx', usecols= 'A, B, C, D, F, G', names= colunas)
+album_anterior = album.copy()
 
 url_base = 'https://www.ligapokemon.com.br/?view=cards/card&card='
-driver = webdriver.Chrome()
+
+options = Options()
+options.add_argument("--no-sandbox")
+
+driver = webdriver.Chrome(options=options)
 driver.maximize_window()
 wait = WebDriverWait(driver, 10)
 
+
 for i, carta in album.iterrows():
+    print("Índice atual:", i)
     if pd.isna(carta['condicao']):
         continue
 
@@ -42,35 +49,105 @@ for i, carta in album.iterrows():
 
     try:
         # Checkbox de condicao
-        checkbox_nm = wait.until(EC.element_to_be_clickable((By.ID, map_de_condicao[condicao])))
-        driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_nm)
-        time.sleep(0.2)
-        checkbox_nm.click()
-        wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
+        try:
+            limpar_filtros = wait.until(EC.presence_of_element_located((By.ID, 'group-4')))
+            
+            try:
+                checkbox_nm = wait.until(EC.element_to_be_clickable((By.ID, map_de_condicao[condicao])))
+                
+                if checkbox_nm.is_displayed():
+                    driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_nm)
+                    
+                    if limpar_filtros.find_element(By.ID, 'clear-4').is_displayed():
+                        if 'filtro-opcao-vazia' not in checkbox_nm.get_attribute('class'):
+                            print('Filtro já está limpo - prosseguindo')
+                        else:
+                            print('Limpando filtros existentes')
+                            limpar_btn = wait.until(EC.element_to_be_clickable((By.ID, 'clear-4')))
+                            driver.execute_script("arguments[0].scrollIntoView(true);", limpar_btn)
+                            limpar_btn.click()
+                            wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
+                            
+                            # Tentar novamente após limpar
+                            checkbox_nm = wait.until(EC.element_to_be_clickable((By.ID, map_de_condicao[condicao])))
+                            driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_nm)
+                            checkbox_nm.click()
+                            wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
+                    else:
+                        print('Nenhum filtro ativo - clicando diretamente')
+                        driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_nm)
+                        checkbox_nm.click()
+                        wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
+            except Exception as e:
+                print('Não existem cartas à venda nesse filtro, passando para a próxima...')
+                continue
+                
+        except Exception as e:
+            print(f'Falha geral no filtro de checkbox, erro: {e}')
+            continue
+
+        except Exception as e:
+            print(f'Falha no filtro de checkbox, erro: {e}')
+            continue
 
         # Botão de comprar 
         marketplace_stores = driver.find_element(By.ID, 'marketplace-stores')
-        primeiro_div = marketplace_stores.find_element(By.XPATH, './div[1]')
-        botao_container = primeiro_div.find_element(By.CLASS_NAME, "buttons")
+        div = marketplace_stores.find_element(By.XPATH, './div[1]')
+        if div.is_displayed():
+            pass
+        else:
+            try:
+                i = 2
+                while div.is_displayed() == 0:
+                    div = marketplace_stores.find_element(By.XPATH, f'./div[{i}]')
+                    if div.is_displayed():
+                        break
+                    i += 1
+            except Exception as e:
+                print(f'Falha no botão de compra, erro: {e}')
+
+        botao_container = div.find_element(By.CLASS_NAME, "buttons")
         botao = botao_container.find_element(By.XPATH, './div[1]')
         driver.execute_script("arguments[0].click();", botao)
         time.sleep(0.5)
 
         # Ir pro carrinho e pegar preço
-        driver.get('https://www.ligapokemon.com.br/?view=mp/carrinho')
-        preco = wait.until(EC.visibility_of_element_located((By.ID, 'sum_preco_0'))).text
-        print(preco)
+        try:
+            driver.get('https://www.ligapokemon.com.br/?view=mp/carrinho')
+            preco = wait.until(EC.visibility_of_element_located((By.ID, 'sum_preco_0'))).text
+            preco = preco[3:].replace(',', '.').strip()
+            print(preco)
+        except Exception as e:
+            print(f'Falha na troca de págino ou seleção de preço, erro: {e}')
+            continue
+
 
         # Tirar do carrinho e aceitar alerta
-        tirar_carrinho = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'btn-circle.remove.delete.item-delete')))
-        driver.execute_script("arguments[0].scrollIntoView(true);", tirar_carrinho)
-        tirar_carrinho.click()
-        wait = WebDriverWait(driver, timeout=2)
-        alert = wait.until(lambda d : d.switch_to.alert)
-        text = alert.text
-        alert.accept()
-    except:
-        print(f'A carta {nome_carta} da condicao {condicao} não existe no site.')
-        continue
+        try:
+            tirar_carrinho = driver.find_element(By.CSS_SELECTOR, '[title="Remover do Carrinho"]')
+            onclick = tirar_carrinho.get_attribute("onclick")
+            driver.execute_script(onclick)
 
+            wait = WebDriverWait(driver, timeout=2)
+            alert = wait.until(lambda d : d.switch_to.alert)
+            text = alert.text
+            alert.accept()
+        except Exception as e:
+            print(f'Falha em tirar carta do carrinho ou confirmação de alerta, erro: {e}')
+            continue
+
+        album.loc[i, 'preco'] = float(preco)
+        
+    except Exception as e:
+        print(e)
+
+album.loc[0,'total'] = album['preco'].sum()
+album.loc[0,'data'] = datetime.now().strftime("%d/%m/%Y")
+
+print('ALBUM ANTERIOR:')
+print(album_anterior)
+
+print('NOVO ALBUM:')
+print(album)
+album_anterior.to_excel("album anterior.xlsx", index=False)
 driver.quit()
