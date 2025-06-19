@@ -10,8 +10,8 @@ import numpy as np
 import time
 import re
 
-colunas = ['nome', 'numero', 'condicao', 'preco', 'total', 'data']
-album = pd.read_excel('album.xlsx', usecols= 'A, B, C, D, F, G', names= colunas)
+colunas = ['nome', 'numero', 'condicao', 'preco', 'ilustracao', 'total', 'data']
+album = pd.read_excel('album.xlsx', usecols= 'A, B, C, D, E, F, G', names= colunas)
 album_anterior = album.copy()
 
 url_base = 'https://www.ligapokemon.com.br/?view=cards/card&card='
@@ -149,5 +149,7 @@ print(album_anterior)
 
 print('NOVO ALBUM:')
 print(album)
+
+album.to_excel("album.xlsx", index=False)
 album_anterior.to_excel("album anterior.xlsx", index=False)
 driver.quit()

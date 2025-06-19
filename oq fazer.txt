@@ -1,2 +1,2 @@
-1. tirar a carta do carrinho dps de pegar o preço
-2. iterar isso com todas as cartas, levando em consideração a tabela
+1. mudar a lógica atual -> desejo trocar os valores do xlsx atual (album) e não criar um novo e substituir o antigo
+forma de fazer: openpyxl 
