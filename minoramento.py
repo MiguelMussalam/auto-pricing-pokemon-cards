@@ -3,34 +3,42 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
+
 from urllib.parse import quote
+
+from openpyxl import load_workbook
+
 from datetime import datetime
-import pandas as pd
-import numpy as np
 import time
-import re
 
-colunas = ['nome', 'numero', 'condicao', 'preco', 'ilustracao', 'total', 'data']
-album = pd.read_excel('album.xlsx', usecols= 'A, B, C, D, E, F, G', names= colunas)
-album_anterior = album.copy()
-
+wb = load_workbook("album.xlsx")
+ws = wb.active
 url_base = 'https://www.ligapokemon.com.br/?view=cards/card&card='
 
 options = Options()
+options.add_argument('--incognito')
+#options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
-
 driver = webdriver.Chrome(options=options)
+
+
+driver.delete_all_cookies()
+driver.get("Https:/www.google.com")
+driver.execute_script("window.localStorage.clear();")
+
+
 driver.maximize_window()
 wait = WebDriverWait(driver, 10)
 
-
-for i, carta in album.iterrows():
-    print("Índice atual:", i)
-    if pd.isna(carta['condicao']):
+for row in ws.iter_rows(min_row=2):
+    nome = str(row[0].value)
+    numero = str(row[1].value)
+    condicao = str(row[2].value)
+    condicao = condicao.strip()
+    if condicao is None:
         continue
 
-    nome_carta = f'{carta.nome.strip()} ({carta.numero.strip()})'
-    condicao = carta.condicao
+    nome_carta = f'{nome.strip()} ({numero.strip()})'
     print(f'Nome: {nome_carta} condição: {condicao}')
 
     url = f'{url_base}{quote(nome_carta, safe="()/'")}'
@@ -81,6 +89,9 @@ for i, carta in album.iterrows():
             except Exception as e:
                 print('Não existem cartas à venda nesse filtro, passando para a próxima...')
                 continue
+        except Exception as e:
+            print('Não existem cartas à venda nesse filtro, passando para a próxima...')
+            continue
                 
         except Exception as e:
             print(f'Falha geral no filtro de checkbox, erro: {e}')
@@ -136,20 +147,17 @@ for i, carta in album.iterrows():
             print(f'Falha em tirar carta do carrinho ou confirmação de alerta, erro: {e}')
             continue
 
-        album.loc[i, 'preco'] = float(preco)
+        row[3].value = float(preco)
         
     except Exception as e:
         print(e)
 
-album.loc[0,'total'] = album['preco'].sum()
-album.loc[0,'data'] = datetime.now().strftime("%d/%m/%Y")
-
-print('ALBUM ANTERIOR:')
-print(album_anterior)
+precos = [row[3].value for row in ws.iter_rows(min_row=2) if isinstance(row[3].value, (int, float))]
+ws["F2"].value = sum(precos)
+ws["G2"].value = datetime.now().strftime("%d/%m/%Y") 
 
 print('NOVO ALBUM:')
-print(album)
+print(ws)
 
-album.to_excel("album.xlsx", index=False)
-album_anterior.to_excel("album anterior.xlsx", index=False)
+wb.save("album.xlsx")
 driver.quit()
