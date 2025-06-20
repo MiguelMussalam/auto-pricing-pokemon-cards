@@ -3,13 +3,13 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
-
 from urllib.parse import quote
-
 from openpyxl import load_workbook
-
+from openpyxl.drawing.image import Image as ExcelImage
 from datetime import datetime
+import requests
 import time
+import re
 
 wb = load_workbook("album.xlsx")
 ws = wb.active
@@ -30,24 +30,22 @@ driver.execute_script("window.localStorage.clear();")
 driver.maximize_window()
 wait = WebDriverWait(driver, 10)
 
-for row in ws.iter_rows(min_row=2):
+for i, row in enumerate(ws.iter_rows(min_row=2)):
     print('_____________________________________________________________________________________________\n')
-    nome = str(row[0].value)
-    numero = str(row[1].value)
-    condicao = str(row[2].value)
-    condicao = condicao.strip()
+    dados = {
+        "nome": row[0].value,
+        "numero": row[1].value,
+        "condicao": row[2].value,
+    }
 
-    if nome is None:
-        print("Nome da carta não presente, indo par a próxima...")
+    if None in dados.values():
+        print("Informações incompletas, indo para a próxima...\n")
         continue
+    else:
+        nome = str(dados["nome"]).strip()
+        numero = str(dados["numero"]).strip()
+        condicao = str(dados["condicao"]).strip()
 
-    if numero is None:
-        print("Número da carta não presente, indo para a próxima...")
-        continue
-
-    if condicao is None:
-        print("Condicao da carta não presente, indo para a próxima...")
-        continue
 
     nome_carta = f'{nome.strip()} ({numero.strip()})'
     print(f'Nome: {nome_carta} condição: {condicao}')
@@ -109,6 +107,27 @@ for row in ws.iter_rows(min_row=2):
         except Exception as e:
             print(f'Falha no filtro de checkbox, erro: {e}')
             continue
+
+        try:
+            img_element = wait.until(EC.presence_of_element_located((By.ID, "featuredImage")))
+            img_url = img_element.get_attribute("src")
+
+            if img_url.startswith("//"):
+                img_url = "https:" + img_url
+            
+            nome_arquivo = re.sub(r'[^\w\-_.()]', '_', nome_carta)
+            img_path = f"imagens/{nome_arquivo}.jpg"
+
+            img_data = requests.get(img_url).content
+            with open(img_path, 'wb') as f:
+                f.write(img_data)
+
+            ws._images = [img for img in ws._images if img.anchor != f'E{i+2}']
+            img_excel = ExcelImage(img_path)
+            ws.add_image(img_excel, f"E{i + 2}")
+        except Exception as e:
+            print(f'Falha na alocação da imagem, erro: {e}')
+
 
         # Botão de comprar 
         marketplace_stores = driver.find_element(By.ID, 'marketplace-stores')
