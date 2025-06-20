@@ -31,18 +31,29 @@ driver.maximize_window()
 wait = WebDriverWait(driver, 10)
 
 for row in ws.iter_rows(min_row=2):
+    print('_____________________________________________________________________________________________\n')
     nome = str(row[0].value)
     numero = str(row[1].value)
     condicao = str(row[2].value)
     condicao = condicao.strip()
+
+    if nome is None:
+        print("Nome da carta não presente, indo par a próxima...")
+        continue
+
+    if numero is None:
+        print("Número da carta não presente, indo para a próxima...")
+        continue
+
     if condicao is None:
+        print("Condicao da carta não presente, indo para a próxima...")
         continue
 
     nome_carta = f'{nome.strip()} ({numero.strip()})'
     print(f'Nome: {nome_carta} condição: {condicao}')
 
     url = f'{url_base}{quote(nome_carta, safe="()/'")}'
-    print(url)
+    print(f'URL acessada: {url}')
     driver.get(url)
 
     # - Marca o checkbox do estado NM
@@ -68,9 +79,8 @@ for row in ws.iter_rows(min_row=2):
                     
                     if limpar_filtros.find_element(By.ID, 'clear-4').is_displayed():
                         if 'filtro-opcao-vazia' not in checkbox_nm.get_attribute('class'):
-                            print('Filtro já está limpo - prosseguindo')
+                            pass
                         else:
-                            print('Limpando filtros existentes')
                             limpar_btn = wait.until(EC.element_to_be_clickable((By.ID, 'clear-4')))
                             driver.execute_script("arguments[0].scrollIntoView(true);", limpar_btn)
                             limpar_btn.click()
@@ -82,7 +92,6 @@ for row in ws.iter_rows(min_row=2):
                             checkbox_nm.click()
                             wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
                     else:
-                        print('Nenhum filtro ativo - clicando diretamente')
                         driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_nm)
                         checkbox_nm.click()
                         wait.until(EC.invisibility_of_element_located((By.ID, 'layer-loading')))
@@ -120,14 +129,14 @@ for row in ws.iter_rows(min_row=2):
         botao_container = div.find_element(By.CLASS_NAME, "buttons")
         botao = botao_container.find_element(By.XPATH, './div[1]')
         driver.execute_script("arguments[0].click();", botao)
-        time.sleep(0.5)
+        time.sleep(0.3)
 
         # Ir pro carrinho e pegar preço
         try:
             driver.get('https://www.ligapokemon.com.br/?view=mp/carrinho')
             preco = wait.until(EC.visibility_of_element_located((By.ID, 'sum_preco_0'))).text
             preco = preco[3:].replace(',', '.').strip()
-            print(preco)
+            print(f'Preco: {preco}')
         except Exception as e:
             print(f'Falha na troca de págino ou seleção de preço, erro: {e}')
             continue
@@ -143,6 +152,7 @@ for row in ws.iter_rows(min_row=2):
             alert = wait.until(lambda d : d.switch_to.alert)
             text = alert.text
             alert.accept()
+            time.sleep(0.1)
         except Exception as e:
             print(f'Falha em tirar carta do carrinho ou confirmação de alerta, erro: {e}')
             continue
@@ -155,9 +165,6 @@ for row in ws.iter_rows(min_row=2):
 precos = [row[3].value for row in ws.iter_rows(min_row=2) if isinstance(row[3].value, (int, float))]
 ws["F2"].value = sum(precos)
 ws["G2"].value = datetime.now().strftime("%d/%m/%Y") 
-
-print('NOVO ALBUM:')
-print(ws)
 
 wb.save("album.xlsx")
 driver.quit()
